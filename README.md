@@ -2,6 +2,11 @@
 
 UIFlowchartCreator is an MCP (Model Context Protocol) server for creating UI flowcharts. This tool helps developers and designers visualize user interfaces and their interactions.
 
+## GitHub Repository
+
+The source code for this project is available on GitHub:
+[https://github.com/umshere/uiflowchartcreator](https://github.com/umshere/uiflowchartcreator)
+
 ## Features
 
 - Generate UI flowcharts based on input specifications
