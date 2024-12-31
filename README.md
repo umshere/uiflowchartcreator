@@ -2,6 +2,8 @@
 
 UIFlowchartCreator is an MCP (Model Context Protocol) server for creating UI flowcharts. This tool helps developers and designers visualize user interfaces and their interactions.
 
+<a href="https://glama.ai/mcp/servers/iv0jenp2hq"><img width="380" height="200" src="https://glama.ai/mcp/servers/iv0jenp2hq/badge" alt="UIFlowchartCreator MCP server" /></a>
+
 ## GitHub Repository
 
 The source code for this project is available on GitHub:
