@@ -22,6 +22,14 @@
         "build",
         "README.md"
     ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/umshere/uiflowchartcreator.git"
+    },
+    "homepage": "https://github.com/umshere/uiflowchartcreator#readme",
+    "bugs": {
+        "url": "https://github.com/umshere/uiflowchartcreator/issues"
+    },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.0.4",
         "axios": "^1.4.0"
