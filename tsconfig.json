@@ -6,4 +6,6 @@
     "esModuleInterop": true,
     "outDir": "./build",
     "strict": true,
- 
+    "skipLibCheck": true
+  }
+}
