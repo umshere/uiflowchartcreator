@@ -1,9 +1,12 @@
 {
     "name": "uiflowchartcreator",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "MCP server for creating UI flowcharts",
     "main": "build/index.js",
     "type": "module",
+    "bin": {
+        "uiflowchartcreator": "build/index.js"
+    },
     "scripts": {
         "start": "node build/index.js",
         "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\""
