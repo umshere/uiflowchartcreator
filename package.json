@@ -1,6 +1,6 @@
 {
     "name": "uiflowchartcreator",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "MCP server for creating UI flowcharts",
     "main": "build/index.js",
     "type": "module",
@@ -9,7 +9,7 @@
     },
     "scripts": {
         "start": "node build/index.js",
-        "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\""
+        "build": "echo 'Running TypeScript compiler...' && tsc && echo 'TypeScript compilation complete. Setting file permissions...' && node -e \"require('fs').chmodSync('build/index.js', '755')\" && echo 'Build completed successfully'"
     },
     "keywords": [
         "mcp",

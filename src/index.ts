@@ -8,27 +8,14 @@ import {
   McpError,
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import axios from "axios";
 import fs from "fs/promises";
 import path from "path";
-
-interface RepoContents {
-  name: string;
-  path: string;
-  type: string;
-  content?: string;
-  download_url?: string;
-  owner?: string;
-  repo?: string;
-}
-
-interface ComponentInfo {
-  name: string;
-  type: "page" | "layout" | "component";
-  filePath: string;
-  imports: string[];
-  children: ComponentInfo[];
-}
+import {
+  fetchLocalRepoContents,
+  fetchGitHubRepoContents,
+  RepoContents,
+} from "./utils/repoHandlers.js";
+import { parseUIFlow, generateMermaidFlowchart } from "./utils/flowParser.js";
 
 // Initialize MCP server with capabilities
 const server = new Server(
@@ -93,259 +80,6 @@ const server = new Server(
     },
   }
 );
-
-async function fetchGitHubRepoContents(
-  owner: string,
-  repo: string,
-  repoPath: string = ""
-): Promise<RepoContents[]> {
-  console.log(
-    `[MCP] Fetching GitHub repo contents for ${owner}/${repo}${
-      repoPath ? `/${repoPath}` : ""
-    }`
-  );
-
-  const githubToken = process.env.GITHUB_TOKEN;
-  if (!githubToken) {
-    throw new McpError(
-      ErrorCode.InvalidRequest,
-      "GitHub token is required. Set GITHUB_TOKEN environment variable."
-    );
-  }
-
-  try {
-    const response = await axios.get(
-      `https://api.github.com/repos/${owner}/${repo}/contents/${repoPath}`,
-      {
-        headers: {
-          Accept: "application/vnd.github.v3+json",
-          Authorization: `token ${githubToken}`,
-          "User-Agent": "UIFlowChartCreator-MCP",
-        },
-      }
-    );
-
-    if (!response.data) {
-      throw new McpError(
-        ErrorCode.InvalidRequest,
-        `No data returned from GitHub API for ${owner}/${repo}`
-      );
-    }
-
-    const excludeList = [
-      "node_modules",
-      ".git",
-      "dist",
-      "build",
-      ".vscode",
-      ".idea",
-      "test",
-      "__tests__",
-    ];
-
-    const excludeFiles = [
-      ".env",
-      ".gitignore",
-      "package-lock.json",
-      "yarn.lock",
-    ];
-
-    return response.data.filter((item: RepoContents) => {
-      if (item.type === "dir" && excludeList.includes(item.name)) {
-        return false;
-      }
-      if (item.type === "file" && excludeFiles.includes(item.name)) {
-        return false;
-      }
-      return true;
-    });
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      throw new McpError(
-        ErrorCode.InvalidRequest,
-        `GitHub API error: ${error.response?.data?.message || error.message}`
-      );
-    }
-    throw error;
-  }
-}
-
-async function fetchLocalRepoContents(
-  repoPath: string
-): Promise<RepoContents[]> {
-  console.log(`[MCP] Fetching local repo contents from ${repoPath}`);
-
-  try {
-    const contents: RepoContents[] = [];
-    const items = await fs.readdir(repoPath, { withFileTypes: true });
-
-    const excludeList = [
-      "node_modules",
-      ".git",
-      "dist",
-      "build",
-      ".vscode",
-      ".idea",
-      "test",
-      "__tests__",
-    ];
-
-    const excludeFiles = [
-      ".env",
-      ".gitignore",
-      "package-lock.json",
-      "yarn.lock",
-    ];
-
-    for (const item of items) {
-      if (
-        excludeList.includes(item.name) ||
-        (item.isFile() && excludeFiles.includes(item.name))
-      )
-        continue;
-
-      const itemPath = path.join(repoPath, item.name);
-      if (item.isDirectory()) {
-        contents.push({
-          name: item.name,
-          path: itemPath,
-          type: "dir",
-        });
-      } else if (item.isFile()) {
-        const content = await fs.readFile(itemPath, "utf-8");
-        contents.push({
-          name: item.name,
-          path: itemPath,
-          type: "file",
-          content,
-        });
-      }
-    }
-
-    return contents;
-  } catch (error) {
-    throw new McpError(
-      ErrorCode.InvalidRequest,
-      `Failed to read local repository: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
-  }
-}
-
-async function parseUIFlow(
-  contents: RepoContents[],
-  isLocal: boolean,
-  fileExtensions: string[] = ["js", "jsx", "ts", "tsx"]
-): Promise<string> {
-  console.log(
-    `[MCP] Parsing UI flow with extensions: ${fileExtensions.join(", ")}`
-  );
-
-  const components: { [key: string]: ComponentInfo } = {};
-
-  async function processContents(
-    currentContents: RepoContents[],
-    currentPath: string = ""
-  ) {
-    for (const item of currentContents) {
-      if (
-        item.type === "file" &&
-        fileExtensions.some((ext) => item.name.endsWith(`.${ext}`))
-      ) {
-        let content: string;
-        if (isLocal) {
-          content = item.content || "";
-        } else {
-          try {
-            const response = await axios.get(item.download_url || "");
-            content = response.data;
-          } catch (error) {
-            console.warn(
-              `[MCP] Failed to fetch content for ${item.name}: ${error}`
-            );
-            continue;
-          }
-        }
-
-        const componentName = item.name.split(".")[0];
-        const componentPath = path.join(currentPath, componentName);
-        const componentType = getComponentType(componentPath);
-
-        components[componentPath] = {
-          name: componentName,
-          type: componentType,
-          filePath: path.join(currentPath, item.name),
-          imports: [],
-          children: [],
-        };
-
-        // Analyze import statements
-        const importMatches = content.match(
-          /import\s+(\w+|\{[^}]+\})\s+from\s+['"]([^'"]+)['"]/g
-        );
-        if (importMatches) {
-          importMatches.forEach((match) => {
-            const [, importedComponent, importPath] =
-              match.match(
-                /import\s+(\w+|\{[^}]+\})\s+from\s+['"]([^'"]+)['"]/
-              ) || [];
-            if (importedComponent) {
-              const cleanedImport = importedComponent
-                .replace(/[{}]/g, "")
-                .trim();
-              const resolvedPath = path.join(
-                currentPath,
-                path.dirname(importPath),
-                cleanedImport
-              );
-              components[componentPath].imports.push(resolvedPath);
-            }
-          });
-        }
-      } else if (item.type === "dir") {
-        const subContents = isLocal
-          ? await fetchLocalRepoContents(item.path)
-          : await fetchGitHubRepoContents(
-              item.owner || "",
-              item.repo || "",
-              item.path
-            );
-
-        await processContents(subContents, path.join(currentPath, item.name));
-      }
-    }
-  }
-
-  await processContents(contents);
-
-  // Build component hierarchy
-  const rootComponents: ComponentInfo[] = [];
-  Object.values(components).forEach((component) => {
-    component.imports.forEach((importPath) => {
-      if (components[importPath]) {
-        components[importPath].children.push(component);
-      }
-    });
-    if (component.imports.length === 0) {
-      rootComponents.push(component);
-    }
-  });
-
-  return JSON.stringify(rootComponents, null, 2);
-}
-
-function getComponentType(
-  componentPath: string
-): "page" | "layout" | "component" {
-  if (componentPath.includes("pages")) {
-    return "page";
-  } else if (componentPath.includes("layouts")) {
-    return "layout";
-  } else {
-    return "component";
-  }
-}
 
 // List available tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -429,13 +163,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       contents = await fetchGitHubRepoContents(owner, repo);
     }
 
-    const uiFlowJson = await parseUIFlow(contents, isLocal, fileExtensions);
+    const components = await parseUIFlow(contents, isLocal, fileExtensions);
+    const mermaidChart = generateMermaidFlowchart(JSON.parse(components));
+
+    // Determine output path based on repository type
+    const outputPath = isLocal
+      ? path.join(repoPath, "userflo.md")
+      : path.join(process.cwd(), "userflo.md");
+    const flowDescription = `# UI Flow Diagram\n\nThis document describes the UI flow of the application.\n\n`;
+    const fullContent =
+      flowDescription + "```mermaid\n" + mermaidChart + "\n```\n\n";
+
+    await fs.writeFile(outputPath, fullContent);
+    console.log(`[MCP] UI flow saved to ${outputPath}`);
 
     return {
       content: [
         {
           type: "text",
-          text: uiFlowJson,
+          text: mermaidChart,
         },
       ],
     };
